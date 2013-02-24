@@ -1,0 +1,66 @@
+diff --git a/lib/Package.js b/lib/Package.js
+index 72d7e9f..8204b8a 100644
+--- a/lib/Package.js
++++ b/lib/Package.js
+@@ -241,23 +241,50 @@ Package.prototype.getDependencies = function(deps, fn){
+ 
+   Object.keys(deps).forEach(function(name){
+     var version = deps[name];
+-    debug('dep %s@%s', name, version);
+-    batch.push(function(done){
+-      var pkg = new Package(name, version, {
+-        dest: self.dest,
+-        force: self.force,
+-        remotes: self.remotes
++    var dupKey = name.replace('/', '-') + '-' + version.replace('*', 'master').replace(/\./g, '-');
++    if(!monitorDup(dupKey)) {
++      debug('dep %s@%s', name, version);
++      batch.push(function(done){
++        var pkg = new Package(name, version, {
++          dest: self.dest,
++          force: self.force,
++          remotes: self.remotes
++        });
++        self.emit('dep', pkg);
++        pkg.on('end', function() {
++          releaseDup(dupKey);
++          done();
++        });
++        pkg.on('exists', function() { 
++          releaseDup(dupKey);
++          done(); 
++        });
++        pkg.install();
+       });
+-      self.emit('dep', pkg);
+-      pkg.on('end', done);
+-      pkg.on('exists', function() { done(); });
+-      pkg.install();
+-    });
++    }
+   });
+ 
+   batch.end(fn);
+ };
+ 
++var dupMonitor = {};
++function monitorDup(dupKey) {
++  if(dupMonitor[dupKey]) {
++    console.log('avoid dup: ' + dupKey);
++    return true;
++  }
++  dupMonitor[dupKey] = true;
++//  console.log('monitor: ' + dupKey);
++  return false;
++}
++
++function releaseDup(dupKey) {
++  if(dupMonitor[dupKey]) { 
++    delete dupMonitor[dupKey];
++//    console.log('release: ' + dupKey);
++  }
++}
++
+ /**
+  * Check if the component exists already,
+  * otherwise install it for realllll.
